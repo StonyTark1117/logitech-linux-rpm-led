@@ -736,5 +736,8 @@ class RpmWheelApp(Adw.Application):
 
 
 if __name__ == "__main__":
+    if "--daemon" in sys.argv:
+        from daemon import main as daemon_main
+        sys.exit(daemon_main())
     app = RpmWheelApp(application_id="com.example.GtkApplication")
     app.run(sys.argv)
