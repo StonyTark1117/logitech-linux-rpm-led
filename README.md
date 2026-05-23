@@ -120,6 +120,61 @@ python main.py
 
 ---
 
+## Headless daemon mode (no GUI)
+
+For autostart on login or via udev plug-in events, the same script can be
+run without the GTK window:
+
+```bash
+python main.py --daemon
+# or, from a package install:
+logitech-rpm-indicator --daemon
+```
+
+In daemon mode, the app reads the same `~/.config/logitech-rpm-indicator/settings.ini`
+the GUI writes, finds a supported wheel, and:
+
+- If `auto_detect=true` (the default when no settings file exists), polls
+  `/proc` once per second for running supported games and switches
+  telemetry sources automatically.
+- Otherwise runs telemetry for `last_selected_game` continuously.
+
+Configuration is still done in the GUI; the daemon picks up whatever
+the GUI last saved.
+
+### Autostart via systemd + udev
+
+The `packaging/` directory ships three files for a typical Linux desktop
+install:
+
+| File | Install to | Purpose |
+|------|-----------|---------|
+| `packaging/systemd/logitech-rpm-indicator.service` | `/usr/lib/systemd/user/` | systemd user unit that runs the daemon |
+| `packaging/udev/72-logitech-rpm-indicator-autostart.rules` | `/usr/lib/udev/rules.d/` | starts the user service when a supported wheel is plugged in |
+| `packaging/desktop/logitech-rpm-indicator.desktop` | `/usr/share/applications/` | application launcher entry for the GUI |
+
+After dropping these in place, run:
+
+```bash
+sudo udevadm control --reload-rules
+systemctl --user daemon-reload
+```
+
+Plug your wheel in (or `sudo udevadm trigger --action=add ...`) and the
+daemon will start automatically; LEDs respond as soon as a supported
+game appears in your process list.
+
+For development (running from a venv inside your home directory),
+override the unit with:
+
+```bash
+systemctl --user edit logitech-rpm-indicator.service
+```
+
+and set `ExecStart=` to your venv's python + `main.py --daemon`.
+
+---
+
 ## Game setup
 
 ### Forza Horizon 5

@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Logitech RPM LED Indicator
+GenericName=Wheel RPM LED Driver
+Comment=Drive Logitech racing wheel RPM LEDs from game telemetry (Forza, F1, DiRT, AMS2, AC)
+Exec=logitech-rpm-indicator
+Icon=input-gaming
+Terminal=false
+Categories=Game;
+Keywords=logitech;g923;g29;rpm;telemetry;wheel;forza;racing;
+StartupWMClass=com.example.GtkApplication

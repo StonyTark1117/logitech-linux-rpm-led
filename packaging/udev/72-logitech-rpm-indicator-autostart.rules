@@ -1,0 +1,13 @@
+# Start the user-level RPM LED daemon when a supported Logitech racing
+# wheel is plugged in. Uses systemd's SYSTEMD_USER_WANTS to push the
+# start event into the logged-in user's systemd manager. Pairs with
+# logitech-rpm-indicator.service.
+#
+# Add a matching line for each supported PID:
+#   c24f / c260 = G29 PS3/PS4
+#   c26e        = G923 Xbox/PC
+#   c267        = G923 PS4
+ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="046d", ATTR{idProduct}=="c24f", TAG+="systemd", ENV{SYSTEMD_USER_WANTS}="logitech-rpm-indicator.service"
+ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="046d", ATTR{idProduct}=="c260", TAG+="systemd", ENV{SYSTEMD_USER_WANTS}="logitech-rpm-indicator.service"
+ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="046d", ATTR{idProduct}=="c26e", TAG+="systemd", ENV{SYSTEMD_USER_WANTS}="logitech-rpm-indicator.service"
+ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="046d", ATTR{idProduct}=="c267", TAG+="systemd", ENV{SYSTEMD_USER_WANTS}="logitech-rpm-indicator.service"

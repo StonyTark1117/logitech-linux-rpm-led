@@ -1,0 +1,17 @@
+[Unit]
+Description=Logitech wheel RPM LED daemon (telemetry driver)
+Documentation=https://github.com/IvanVojtko/logitech-linux-rpm-led
+
+[Service]
+# Default ExecStart assumes the app is installed system-wide with a
+# /usr/bin/logitech-rpm-indicator launcher script (e.g. via an AUR or
+# distro package). For a source/venv install, override via:
+#   systemctl --user edit logitech-rpm-indicator.service
+# and set ExecStart to your venv python + main.py --daemon.
+Type=simple
+ExecStart=/usr/bin/logitech-rpm-indicator --daemon
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target
