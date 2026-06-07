@@ -41,6 +41,15 @@ _led_report(bits: int) -> Sequence[int]
         self._last_bits = bits
         self._dev.write(bytes(self._led_report(bits)))
 
+    def close(self) -> None:
+        if self._dev is not None:
+            try:
+                self._dev.close()
+            except Exception:
+                pass
+            self._dev = None
+        self._last_bits = -1
+
     def _post_connect_setup(self) -> None:
         pass
 
