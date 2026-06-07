@@ -53,6 +53,7 @@ RECONNECT_DELAY_SECONDS = 1.0
 RECONNECT_INACTIVITY_SECONDS = 3.0
 AUTO_DETECT_INTERVAL_SECONDS = 1.0
 LED_SEND_INTERVAL_SECONDS = 0.05
+WHEEL_REACQUIRE_INTERVAL_SECONDS = 2.0
 
 
 def _settings_path() -> Path:
@@ -123,13 +124,13 @@ def _close_socket(udp_socket, game=None):
     return None
 
 
-def _telemetry_loop(game, wheel, choice, stop_event):
+def _telemetry_loop(game, wheel, choice, stop_event, wheel_lost):
     udp_socket = None
     percent = 0
     last_send = 0.0
     last_packet_time = 0.0
     next_reconnect_time = 0.0
-    while not stop_event.is_set():
+    while not stop_event.is_set() and not wheel_lost.is_set():
         now = time.monotonic()
         if udp_socket is None:
             if now < next_reconnect_time:
@@ -172,7 +173,14 @@ def _telemetry_loop(game, wheel, choice, stop_event):
             try:
                 wheel.leds_rpm(clamped)
             except Exception as exc:
-                print(f"[daemon] wheel write failed: {exc}", file=sys.stderr, flush=True)
+                print(
+                    f"[daemon] wheel write failed ({exc}); marking wheel lost",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                wheel_lost.set()
+                _close_socket(udp_socket, game)
+                return
             last_send = now
 
     try:
@@ -186,14 +194,37 @@ def main() -> int:
     config = _load_settings()
     BaseWheel.set_shift_light_thresholds(config["thresholds"])
 
-    wheel = find_wheel()
-    if not wheel:
-        print("[daemon] no supported Logitech wheel found, exiting", file=sys.stderr, flush=True)
-        return 1
-
     shutdown = threading.Event()
     telemetry_stop = threading.Event()
-    state = {"thread": None, "choice": None}
+    wheel_lost = threading.Event()
+    state = {"thread": None, "choice": None, "wheel": None}
+
+    def acquire_wheel():
+        announced = False
+        while not shutdown.is_set():
+            candidate = find_wheel()
+            if candidate:
+                state["wheel"] = candidate
+                print("[daemon] wheel acquired", flush=True)
+                return candidate
+            if not announced:
+                print(
+                    "[daemon] waiting for a supported Logitech wheel...",
+                    flush=True,
+                )
+                announced = True
+            shutdown.wait(WHEEL_REACQUIRE_INTERVAL_SECONDS)
+        return None
+
+    def release_wheel():
+        old = state["wheel"]
+        state["wheel"] = None
+        if old is None:
+            return
+        try:
+            old.close()
+        except Exception:
+            pass
 
     def stop_telemetry():
         telemetry_stop.set()
@@ -202,20 +233,24 @@ def main() -> int:
             thread.join(timeout=1.0)
         state["thread"] = None
         state["choice"] = None
-        try:
-            wheel.leds_rpm(0)
-        except Exception:
-            pass
+        wheel = state["wheel"]
+        if wheel:
+            try:
+                wheel.leds_rpm(0)
+            except Exception:
+                pass
 
     def start_telemetry(choice):
         game = _create_game(choice, config)
-        if not game:
+        wheel = state["wheel"]
+        if not game or not wheel:
             return
         telemetry_stop.clear()
+        wheel_lost.clear()
         state["choice"] = choice
         thread = threading.Thread(
             target=_telemetry_loop,
-            args=(game, wheel, choice, telemetry_stop),
+            args=(game, wheel, choice, telemetry_stop, wheel_lost),
             daemon=True,
         )
         thread.start()
@@ -226,6 +261,9 @@ def main() -> int:
     signal.signal(signal.SIGTERM, handle_signal)
     signal.signal(signal.SIGINT, handle_signal)
 
+    if not acquire_wheel():
+        return 0
+
     if config["auto_detect"]:
         print("[daemon] auto-detect ON; polling for running games every 1s", flush=True)
     else:
@@ -234,6 +272,19 @@ def main() -> int:
 
     last_check = 0.0
     while not shutdown.is_set():
+        if wheel_lost.is_set():
+            print(
+                "[daemon] wheel disappeared; tearing down telemetry and re-acquiring",
+                flush=True,
+            )
+            stop_telemetry()
+            release_wheel()
+            wheel_lost.clear()
+            if not acquire_wheel():
+                break
+            last_check = 0.0
+            continue
+
         if config["auto_detect"]:
             now = time.monotonic()
             if now - last_check >= AUTO_DETECT_INTERVAL_SECONDS:
@@ -256,6 +307,7 @@ def main() -> int:
 
     print("[daemon] shutting down", flush=True)
     stop_telemetry()
+    release_wheel()
     return 0
 
 
